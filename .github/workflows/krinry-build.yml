@@ -43,6 +43,21 @@ jobs:
 
       - name: Create android folder
         run: flutter create --platforms android .
+          python3 - <<'PY2'
+from pathlib import Path
+
+p = Path("android/app/build.gradle")
+s = p.read_text()
+
+if 'ndkVersion' not in s:
+    s = s.replace(
+        'android {',
+        'android {\n    ndkVersion "28.2.13676358"',
+        1
+    )
+
+p.write_text(s)
+PY2
 
       - name: Configure Android stack
         shell: bash

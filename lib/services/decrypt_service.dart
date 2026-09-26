@@ -32,15 +32,10 @@ class DecryptService {
         message: 'تم فك وتحليل الملف بنجاح',
         data: result,
       );
-    } on HCError catch (e) {
-      return DecryptResult(
-        success: false,
-        message: e.message,
-      );
     } catch (e) {
       return DecryptResult(
         success: false,
-        message: 'Unexpected error: $e',
+        message: e.toString(),
       );
     }
   }
