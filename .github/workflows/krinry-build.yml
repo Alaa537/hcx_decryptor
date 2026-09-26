@@ -192,6 +192,22 @@ jobs:
           zipStorePath=wrapper/dists
           PROPS
 
+      - name: Create MainActivity
+        shell: bash
+        run: |
+          mkdir -p android/app/src/main/kotlin/com/alaa/hcx_decryptor
+
+          cat > android/app/src/main/kotlin/com/alaa/hcx_decryptor/MainActivity.kt <<'KOTLIN'
+          package com.alaa.hcx_decryptor
+
+          import io.flutter.embedding.android.FlutterActivity
+
+          class MainActivity : FlutterActivity()
+          KOTLIN
+
+          echo "MainActivity created"
+          cat android/app/src/main/kotlin/com/alaa/hcx_decryptor/MainActivity.kt
+
       - name: Verify Android files
         run: |
           test -f android/settings.gradle
