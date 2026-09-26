@@ -42,7 +42,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -61,33 +61,137 @@ jobs:
       - name: Create Android project
         run: flutter create --platforms android .
 
-      - name: Configure Android
+      - name: Convert Android project to Groovy
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          rm -f android/settings.gradle.kts
+          rm -f android/build.gradle.kts
+          rm -f android/app/build.gradle.kts
 
-          p = Path("android/app/build.gradle")
-          s = p.read_text()
+          cat > android/settings.gradle <<'GRADLE'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
 
-          if 'ndkVersion' not in s:
-              s = s.replace(
-                  'android {',
-                  'android {\n    ndkVersion "28.2.13676358"',
-                  1
-              )
+              includeBuild("${flutterSdkPath}/packages/flutter_tools/gradle")
 
-          p.write_text(s)
-          print("Android NDK configured: 28.2.13676358")
-          PY
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
 
-      - name: Configure Gradle
-        shell: bash
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "8.9.1" apply false
+              id "org.jetbrains.kotlin.android" version "2.1.0" apply false
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "hcx_decryptor"
+          include ":app"
+          GRADLE
+
+          cat > android/build.gradle <<'GRADLE'
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = "../build"
+
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+
+          subprojects {
+              project.evaluationDependsOn(":app")
+          }
+
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          GRADLE
+
+          cat > android/app/build.gradle <<'GRADLE'
+          plugins {
+              id "com.android.application"
+              id "org.jetbrains.kotlin.android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+
+          android {
+              namespace "com.alaa.hcx_decryptor"
+              compileSdk 36
+              ndkVersion "28.2.13676358"
+
+              defaultConfig {
+                  applicationId "com.alaa.hcx_decryptor"
+                  minSdk 24
+                  targetSdk 36
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+
+          flutter {
+              source "../.."
+          }
+          GRADLE
+
+          cat > android/gradle.properties <<'PROPS'
+          org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=1G -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          PROPS
+
+          mkdir -p android/gradle/wrapper
+
+          cat > android/gradle/wrapper/gradle-wrapper.properties <<'PROPS'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.11.1-all.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          PROPS
+
+      - name: Verify Android files
         run: |
-          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
-            sed -i 's#gradle-[0-9.]*-all.zip#gradle-8.11.1-all.zip#g' \
-              android/gradle/wrapper/gradle-wrapper.properties
-          fi
+          test -f android/settings.gradle
+          test -f android/build.gradle
+          test -f android/app/build.gradle
+          echo "Android Groovy project ready"
+          grep -n "ndkVersion" android/app/build.gradle
 
       - name: Build
         shell: bash
@@ -102,15 +206,13 @@ jobs:
             else
               flutter build apk --$TYPE
             fi
-
           elif [ "$OUT" = "apk-split" ]; then
             flutter build apk --$TYPE --split-per-abi
-
           elif [ "$OUT" = "appbundle" ]; then
             flutter build appbundle --$TYPE
           fi
 
-      - name: Upload APK/AAB
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-output
