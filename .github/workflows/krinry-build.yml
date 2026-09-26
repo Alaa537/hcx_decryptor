@@ -94,10 +94,17 @@ jobs:
           }
 
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositoriesMode = RepositoriesMode.PREFER_SETTINGS
+
+              String storageUrl = System.env.FLUTTER_STORAGE_BASE_URL ?: "https://storage.googleapis.com"
+
               repositories {
                   google()
                   mavenCentral()
+
+                  maven {
+                      url = uri("$storageUrl/download.flutter.io")
+                  }
               }
           }
 
